@@ -25,7 +25,7 @@
 - **도메인 무결성**: Check 제약조건
 
 ## 데이터베이스 아키텍처
-![데이터베이스 아키텍처](allenkang92/coupangplay-db/src/image/db_total.png)
+![데이터베이스 아키텍처](src/image/db_total.png)
 
 ## 주요 기능
 
@@ -176,10 +176,10 @@ GROUP BY DATE_FORMAT(created_at, '%Y-%m');
 ## 데이터베이스 구조
 
 ### 스트리밍 서비스 DB 스키마
-![스트리밍 서비스 DB 스키마](allenkang92/coupangplay-db/src/image/db_schema.png)
+![스트리밍 서비스 DB 스키마](src/image/db_schema.png)
 
 ### 스트리밍 서비스 DB ERD
-![스트리밍 서비스 DB ERD](allenkang92/coupangplay-db/src/image/db_erd.png)
+![스트리밍 서비스 DB ERD](src/image/db_erd.png)
 
 ### 주요 테이블
 - **users**: 사용자 정보
