@@ -13,12 +13,16 @@ CREATE TABLE user (
     user_id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
-    -- 비밀번호는 반드시 해시화하여 저장
-    password VARCHAR(255) NOT NULL COMMENT '해시된 비밀번호',
+    password_hash VARCHAR(255) NOT NULL COMMENT '해시된 비밀번호',
+    password_salt VARCHAR(255) NOT NULL COMMENT '비밀번호 솔트',
+    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    two_factor_secret VARCHAR(255),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME,
     is_active BOOLEAN DEFAULT TRUE,
-    profile_preferences JSON COMMENT '사용자 설정 및 선호도 (자막, 화질 등)'
+    profile_preferences JSON COMMENT '사용자 설정 및 선호도 (자막, 화질 등)',
+    failed_login_attempts INT DEFAULT 0,
+    account_locked_until DATETIME
 ) COMMENT '사용자 기본 정보 테이블';
 
 -- 시리즈 테이블
@@ -52,8 +56,47 @@ CREATE TABLE content (
     view_count INT DEFAULT 0,
     license_info JSON COMMENT '라이선스 정보 (시작일, 종료일, 조건 등)',
     region_restrictions JSON COMMENT '지역별 시청 제한 정보',
-    metadata JSON COMMENT '배우, 감독, 제작사 등 추가 정보'
+    metadata JSON COMMENT '배우, 감독, 제작사 등 추가 정보',
+    video_quality JSON COMMENT '지원되는 해상도 및 비트레이트 정보',
+    audio_tracks JSON COMMENT '지원되는 오디오 트랙 정보',
+    subtitle_tracks JSON COMMENT '지원되는 자막 정보',
+    content_hash VARCHAR(255) COMMENT '콘텐츠 무결성 검증용 해시',
+    cdn_info JSON COMMENT 'CDN 배포 정보',
+    encryption_info JSON COMMENT 'DRM 및 암호화 정보'
 ) COMMENT '콘텐츠 기본 정보 테이블';
+
+-- 다국어 지원을 위한 테이블 추가
+CREATE TABLE content_translations (
+    translation_id INT PRIMARY KEY AUTO_INCREMENT,
+    content_id INT,
+    language_code VARCHAR(5),
+    title VARCHAR(255),
+    description TEXT,
+    metadata JSON COMMENT '해당 언어의 메타데이터',
+    UNIQUE KEY unique_content_lang (content_id, language_code),
+    FOREIGN KEY (content_id) REFERENCES content(content_id) ON DELETE CASCADE
+) COMMENT '콘텐츠 다국어 정보 테이블';
+
+-- 추천 시스템을 위한 테이블 추가
+CREATE TABLE content_similarity (
+    content_id1 INT,
+    content_id2 INT,
+    similarity_score FLOAT,
+    similarity_factors JSON COMMENT '유사도 계산 요소들',
+    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (content_id1, content_id2),
+    FOREIGN KEY (content_id1) REFERENCES content(content_id) ON DELETE CASCADE,
+    FOREIGN KEY (content_id2) REFERENCES content(content_id) ON DELETE CASCADE
+) COMMENT '콘텐츠 간 유사도 정보 테이블';
+
+CREATE TABLE user_preferences (
+    user_id INT PRIMARY KEY,
+    genre_preferences JSON COMMENT '선호 장르 가중치',
+    watch_history_summary JSON COMMENT '시청 이력 요약 정보',
+    recommendation_feedback JSON COMMENT '추천 피드백 정보',
+    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
+) COMMENT '사용자 선호도 분석 테이블';
 
 -- -----------------------------------------------------
 -- 관계 테이블 영역 시작
@@ -219,6 +262,12 @@ CREATE INDEX idx_payment_user ON payment(user_id, payment_date);
 CREATE INDEX idx_review_content ON review(content_id, rating);
 CREATE INDEX idx_session_user ON user_session(user_id, is_active);
 
+-- 성능 최적화를 위한 인덱스 추가
+CREATE INDEX idx_content_popularity ON content(view_count DESC, release_date DESC);
+CREATE INDEX idx_content_metadata ON content((JSON_EXTRACT(metadata, '$.genre')));
+CREATE INDEX idx_view_history_user_date ON view_history(user_id, watch_date);
+CREATE INDEX idx_content_translations_lang ON content_translations(language_code, content_id);
+
 -- -----------------------------------------------------
 -- 분석용 뷰 생성
 -- -----------------------------------------------------
@@ -281,3 +330,13 @@ BEGIN
 END //
 
 DELIMITER ;
+
+-- 캐싱을 위한 테이블 추가
+CREATE TABLE content_cache (
+    cache_key VARCHAR(255) PRIMARY KEY,
+    content_data JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME,
+    last_accessed DATETIME,
+    access_count INT DEFAULT 0
+) COMMENT '콘텐츠 캐시 테이블';
