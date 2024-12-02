@@ -16,149 +16,191 @@
 ## 기술 스택
 
 ### 데이터베이스
-- MySQL 8.0 이상
-- Redis (캐싱 및 세션 관리)
-- MongoDB (로그 및 분석 데이터)
+- MySQL 8.0: 사용자, 구독, 시리즈 등 구조화된 데이터 저장
+- Redis 6.2: 캐싱, 세션 관리, 실시간 데이터 처리
+- MongoDB: 시청 기록, 분석 데이터 저장
+
+### 백엔드
+- FastAPI: 고성능 Python 웹 프레임워크
+- JWT: 토큰 기반 인증
+- Pydantic: 데이터 검증
 
 ### 인프라
-- AWS/GCP (클라우드 인프라)
-- CloudFront/CloudFlare (CDN)
-- Docker (컨테이너화)
+- Docker: 컨테이너화
+- Docker Compose: 서비스 오케스트레이션
 
-### 모니터링
-- Prometheus (메트릭 수집)
-- Grafana (대시보드)
-- ELK Stack (로그 분석)
+### 모니터링 (구현 예정)
+- Prometheus: 메트릭 수집
+- Grafana: 대시보드
+- ELK Stack: 로그 분석
+
+## 프로젝트 구조
+
+```
+streaming-service-db/
+├── app/                    # 애플리케이션 메인 디렉터리
+│   ├── api/               # API 엔드포인트
+│   │   ├── __init__.py
+│   │   ├── auth.py       # 인증 관련 엔드포인트
+│   │   ├── series.py     # 시리즈/에피소드 관리
+│   │   └── subscriptions.py  # 구독 관리
+│   ├── core/             # 핵심 기능
+│   │   ├── __init__.py
+│   │   ├── config.py     # 애플리케이션 설정
+│   │   ├── security.py   # 보안 유틸리티
+│   │   └── database.py   # 데이터베이스 연결
+│   ├── models/           # 데이터 모델
+│   │   ├── __init__.py
+│   │   └── schemas.py    # Pydantic 모델
+│   ├── main.py          # FastAPI 애플리케이션
+│   ├── requirements.txt  # 프로젝트 의존성
+│   └── Dockerfile       # API 서비스 Dockerfile
+├── db/                   # 데이터베이스 관련 파일
+│   ├── mysql/
+│   │   └── schema.sql   # MySQL 스키마
+│   └── mongodb/
+│       └── init-mongo.js # MongoDB 초기화
+├── docs/                 # 문서
+│   └── project_plan.md  # 프로젝트 문서
+└── docker-compose.yml   # Docker 서비스 설정
+```
 
 ## 주요 기능
 
-### 1. 사용자 관리 및 보안
-- 강화된 비밀번호 보안 (해시 + 솔트)
-- 2단계 인증(2FA)
-- 세션 관리 및 동시 접속 제어
-- IP 기반 접근 제어
-- 계정 도용 방지 시스템
+### 1. 사용자 관리 및 보안 (구현 완료)
+- JWT 토큰 기반 인증
+- 비밀번호 해싱 (bcrypt)
+- 세션 관리
+- 접근 제어
 
-### 2. 콘텐츠 관리
-- 다국어 콘텐츠 메타데이터
-- DRM 및 콘텐츠 암호화
-- 적응형 스트리밍 지원
-- 지역별 라이선스 관리
-- 콘텐츠 버전 관리
+### 2. 콘텐츠 관리 (구현 완료)
+- 시리즈 및 에피소드 관리
+- 시청 진행률 추적
+- 메타데이터 관리
+- 구독 기반 접근 제어
 
-### 3. 스트리밍 최적화
-- CDN 통합
-- 지능형 캐싱
-- 적응형 비트레이트
-- 버퍼링 최소화
-- 네트워크 최적화
+### 3. 구독 관리 (구현 완료)
+- 구독 생성 및 취소
+- 구독 상태 확인
+- 구독 기간 관리
 
-### 4. 개인화 및 추천
+### 4. 개인화 및 추천 (미구현ㄴ)
 - 협업 필터링 기반 추천
-- 콘텐츠 유사도 분석
-- 시청 패턴 학습
-- A/B 테스트 지원
-- 실시간 추천 업데이트
+- 시청 기록 기반 개인화
+- 인기 콘텐츠 추천
+
+## API 엔드포인트
+
+### 인증
+- `POST /api/register`: 새 사용자 등록
+- `POST /api/token`: 로그인 및 토큰 발급
+
+### 시리즈
+- `GET /api/series`: 시리즈 목록 조회
+- `GET /api/series/{series_id}`: 특정 시리즈 조회
+- `GET /api/series/{series_id}/episodes`: 시리즈의 에피소드 목록 조회
+- `POST /api/series/{series_id}/progress`: 시청 진행률 업데이트
+
+### 구독
+- `POST /api/subscriptions`: 새 구독 생성
+- `GET /api/subscriptions/current`: 현재 구독 정보 조회
+- `DELETE /api/subscriptions/current`: 현재 구독 취소
 
 ## 데이터베이스 설계
 
-### 핵심 테이블 구조
+### MySQL 테이블
 ```sql
--- 예시: 사용자 테이블
-CREATE TABLE user (
-    user_id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) UNIQUE NOT NULL,
+-- 사용자 테이블
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
     email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    password_salt VARCHAR(255) NOT NULL,
-    two_factor_enabled BOOLEAN DEFAULT FALSE
+    hashed_password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 예시: 콘텐츠 테이블
-CREATE TABLE content (
-    content_id INT PRIMARY KEY AUTO_INCREMENT,
+-- 구독 테이블
+CREATE TABLE subscriptions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    plan_id INT NOT NULL,
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 시리즈 테이블
+CREATE TABLE series (
+    id INT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    video_quality JSON,
-    audio_tracks JSON,
-    subtitle_tracks JSON
+    release_year INT,
+    genre VARCHAR(50),
+    rating VARCHAR(10)
 );
 ```
 
-### 성능 최적화
-- 전략적 인덱싱
-- 파티셔닝
-- 캐싱 계층
-- 쿼리 최적화
-- 데이터 압축
+### MongoDB 컬렉션
+- ViewingLogs: 시청 기록
+- Analytics: 사용자 행동 및 선호도
 
-## 설치 및 설정
+### Redis
+- 시청 진행률 캐싱
+- 세션 관리
+- 인기 콘텐츠
 
-### 필수 요구사항
-- MySQL 8.0 이상
-- Redis 6.0 이상
-- Node.js 14.0 이상 (관리 도구용)
-- Docker 및 Docker Compose
+## 설치 및 실행
 
-### 설치 단계
+1. 저장소 복제:
+   ```bash
+   git clone https://github.com/yourusername/streaming-service-db.git
+   cd streaming-service-db
+   ```
 
-1. 저장소 클론
-```bash
-git clone https://github.com/yourusername/streaming-service-db.git
-cd streaming-service-db
-```
+2. 환경 파일 생성:
+   ```bash
+   # .env 파일을 프로젝트 루트에 생성
+   MYSQL_HOST=mysql
+   MYSQL_PORT=3306
+   MYSQL_USER=streaming_user
+   MYSQL_PASSWORD=userpassword
+   MYSQL_DATABASE=streaming_db
+   MONGO_URI=mongodb://root:rootpassword@mongodb:27017/
+   REDIS_HOST=redis
+   REDIS_PORT=6379
+   SECRET_KEY=your-secret-key-here
+   ```
 
-2. 환경 설정
-```bash
-cp .env.example .env
-# .env 파일에서 필요한 설정 수정
-```
+3. 서비스 시작:
+   ```bash
+   docker-compose up --build
+   ```
 
-3. 데이터베이스 생성
-```bash
-mysql -u root -p < sql/create_database.sql
-```
+4. API 접속:
+   - API 문서: http://localhost:8000/docs
+   - ReDoc 문서: http://localhost:8000/redoc
 
-4. 초기 데이터 로드
-```bash
-mysql -u root -p coupang_play < sql/sample_data.sql
-```
+## 개발하기
 
-## 모니터링 및 운영
+1. 의존성 설치:
+   ```bash
+   pip install -r app/requirements.txt
+   ```
 
-### 성능 모니터링
-- 실시간 접속자 추적
-- 쿼리 성능 분석
-- 리소스 사용량 모니터링
-- 오류 및 예외 추적
-- CDN 성능 측정
+2. 테스트 실행:
+   ```bash
+   pytest
+   ```
 
-### 데이터 분석
-- 사용자 행동 분석
-- 콘텐츠 인기도 추적
-- 추천 시스템 효과 측정
-- A/B 테스트 결과 분석
-- 성능 병목 지점 식별
+3. 코드 포맷팅:
+   ```bash
+   black app/
+   ```
 
-## 보안 고려사항
+## 기여하기
 
-### 데이터 보안
-- 암호화 (저장 및 전송)
-- 접근 제어
-- 감사 로깅
-- 취약점 스캐닝
-- 정기적인 보안 감사
-
-### 규정 준수
-- GDPR 준수
-- CCPA 준수
-- PIPEDA 준수
-- 데이터 현지화 요구사항
-- 개인정보 보호 정책
-
-## 확장 계획
-- 캐싱 시스템 고도화
-- 실시간 분석 강화
-- API 성능 최적화
-- 모니터링 시스템 개선
-- 확장 관리 시스템 개선
+1. 저장소 포크
+2. 기능 브랜치 생성
+3. 변경사항 커밋
+4. 브랜치에 푸시
+5. Pull Request 생성
